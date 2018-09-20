@@ -86,14 +86,19 @@ object Assignment1 {
 
 
     //Code for Task 3 below
-    val inputDF2 = inputDF
+    /*val inputDF2 = inputDF
                       .withColumn("Salary",  inputDF.col("Salary").cast("Integer"))
-        .select("Country", "Salary", "SalaryType")
+        .select("Country", "Salary", "SalaryType")*/
 
-    val inputDF3 = inputDF2.withColumn("Salary", inputDF2.when(col("SalaryType") == "Monthly"), col("Salary")*12)
+    val inputDF3 = inputDF.withColumn(
+                    "Salary",
+                    when(inputDF.col("SalaryType") === lit("Monthly"), inputDF.col("Salary").cast("Integer") * 12)
+                  .when(inputDF.col("SalaryType") === lit("Weekly"), inputDF.col("Salary").cast("Integer") * 52)
+                  .otherwise(inputDF.col("Salary").cast("Integer")))
 
-    inputDF2.show(10)
-
-    inputDF2.groupBy("Country").avg("Salary").show(20)
+    inputDF3.show(10)
+    //inputDF3.groupBy("Country").avg("Salary").show(20)
+    inputDF3.groupBy("Country").agg(count("Salary"),
+        min("Salary"),  max("Salary"), bround(avg("Salary"),2)).show(20)
   }
 }
