@@ -90,15 +90,37 @@ object Assignment1 {
                       .withColumn("Salary",  inputDF.col("Salary").cast("Integer"))
         .select("Country", "Salary", "SalaryType")*/
 
-    val inputDF3 = inputDF.withColumn(
-                    "Salary",
-                    when(inputDF.col("SalaryType") === lit("Monthly"), inputDF.col("Salary").cast("Integer") * 12)
-                  .when(inputDF.col("SalaryType") === lit("Weekly"), inputDF.col("Salary").cast("Integer") * 52)
-                  .otherwise(inputDF.col("Salary").cast("Integer")))
+    inputDF.groupBy("Country").agg(count("SalaryType")).show(20)
 
-    inputDF3.show(10)
+    val rows1 = inputDF.count()
+    val summary1 = inputDF.describe().filter($"summary" === "count")
+    summary1.select(inputDF.columns.map(c =>(lit(rows1) - col(c)).alias(c)): _*).show
+
+
+    val inputDF3 = inputDF.withColumn("Country", inputDF.col("Country"))
+                    .withColumn(
+                    "Salary",
+                    when(inputDF.col("SalaryType") === lit("Monthly"), regexp_replace(inputDF.col("Salary").cast("String"), lit(","), lit("")).cast("Double") * 12)
+                  .when(inputDF.col("SalaryType") === lit("Weekly"), regexp_replace(inputDF.col("Salary").cast("String"), lit(","), lit("")).cast("Double") * 52)
+                  //.when(inputDF.col("SalaryType") === lit("Yearly"), inputDF.col("Salary").cast("Double") * 1.0)
+                  //.when(inputDF.col("SalaryType") === lit("NA"), inputDF.col("Salary").cast("Double") * 1.0)
+                        .otherwise(regexp_replace(inputDF.col("Salary").cast("String"), lit(","), lit("")).cast("Double")*  1)
+    ).withColumn("SalaryType", inputDF.col("SalaryType") )
+
+
+    val rows = inputDF3.count()
+    val summary = inputDF3.describe().filter($"summary" === "count")
+    summary.select(inputDF3.columns.map(c =>(lit(rows) - col(c)).alias(c)): _*).show
+
+    //inputDF3.show(10)
     //inputDF3.groupBy("Country").avg("Salary").show(20)
-    inputDF3.groupBy("Country").agg(count("Salary"),
-        min("Salary"),  max("Salary"), bround(avg("Salary"),2)).show(20)
+    val finalDF = inputDF3.groupBy("Country").agg(count("Salary"),
+        min("Salary").cast("Integer"),  max("Salary").cast("Integer"), bround(avg("Salary").cast("Double"),2))
+
+
+    finalDF.show(20)
+    val finalOutput = "AggregateValues.csv"
+    //finalDF.coalesce(1).write.format("csv").option("header", "true").csv(finalOutput)
+
   }
 }
