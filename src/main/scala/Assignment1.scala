@@ -1,6 +1,7 @@
-import org.apache.hadoop.hive.ql.exec.persistence.HybridHashTableContainer.HashPartition
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.functions._
+
 
 //imports to disable info errors
 import org.apache.log4j.Logger
@@ -33,7 +34,7 @@ object Assignment1 {
                     .select("Country", "Salary", "SalaryType")
                     .filter("Salary not in ('NA', '0')").sort("Country")
 
-    inputDF.groupBy("Country").count().show(5);
+    inputDF.groupBy("Country").count().show(5)
 
     val totalRecords = inputDF.count()
 
@@ -42,6 +43,7 @@ object Assignment1 {
     val interCountryCounts = countryRDD.map(word => (word, 1))
 
 
+    interCountryCounts.take(1).foreach(println)
     val startTime = System.currentTimeMillis()
     val countryCounts:RDD[(String, Int)] = interCountryCounts.reduceByKey(_+_)//.sortBy(_._1.toString)
     countryCounts.take(5).foreach(println)
@@ -69,27 +71,29 @@ object Assignment1 {
     val countryCountRDD = countryRDD.map(word => (word, 1))
     val customPartitionedCountry:RDD[(String, Int)] = countryCountRDD.partitionBy(new HashPartitioner(2))
 
-    //println("After partitioning")
-    //customPartitionedCountry.take(5).foreach(println)
-
+    customPartitionedCountry.take(1).foreach(println)
     val startTime2 = System.currentTimeMillis()
     val customPartitionCounts = customPartitionedCountry.reduceByKey(_+_)//.sortBy(_._1.toString)
     customPartitionCounts.take(5).foreach(println)
     val endTime2 = System.currentTimeMillis()
     println("Time taken for second operations is " + (endTime2-startTime2))
 
-    /*val newCountryRDD = sc.parallelize(countryRDD.collect())
-    val startTime2 = System.currentTimeMillis()
-
-    val custPartCountryRDD = newCountryRDD.map(word => (word.toString, 1)).reduceByKey(_+_)
-    custPartCountryRDD.take(5).foreach(println)
-    val endTime2 = System.currentTimeMillis()
-    println("Time taken for second operations is " + (endTime2-startTime2))*/
-
     val numPartitions2 = customPartitionedCountry.getNumPartitions
     println("Number of partitions is " + numPartitions)
 
     customPartitionedCountry.mapPartitionsWithIndex{case (i, rows) => Iterator((i, rows.size))}
       .toDF("Partition Number", "Number of Records").show
+
+
+    //Code for Task 3 below
+    val inputDF2 = inputDF
+                      .withColumn("Salary",  inputDF.col("Salary").cast("Integer"))
+        .select("Country", "Salary", "SalaryType")
+
+    val inputDF3 = inputDF2.withColumn("Salary", inputDF2.when(col("SalaryType") == "Monthly"), col("Salary")*12)
+
+    inputDF2.show(10)
+
+    inputDF2.groupBy("Country").avg("Salary").show(20)
   }
 }
