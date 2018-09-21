@@ -1,6 +1,9 @@
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions._
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs._
+import org.apache.spark.sql.Row
 
 
 //imports to disable info errors
@@ -51,17 +54,45 @@ object Assignment1 {
     println("First operation - time taken is " + (endTime-startTime))
 
 
-    val countryDF = countryCounts.toDF("total", totalRecords.toString)
+    val countryDF = countryCounts.sortBy(_._1.toString).toDF("Total", totalRecords.toString)
     countryDF.show(10)
-    //countryDF.coalesce(1).write.format("csv").option("header", "true").csv(outputFileName)
+    //countryDF.coalesce(1).write.mode("overwrite").format("csv").option("header", "true").csv(outputFileName)
+
+    // Trying CSV File merging below //
+
+    val outputfile = ""
+    val filename = outputFileName
+    val outputFileName2 = outputfile + "temp_" + filename
+    val mergedFileName = outputfile + "merged_" + filename
+    val mergeFindGlob  = outputFileName2
+
+    countryDF.write
+      .format("csv")
+      .option("header", "true")
+      .mode("overwrite")
+      .save(outputFileName2)
+    merge(mergeFindGlob, mergedFileName )
 
     //Task 1 Complete. Task 2 code below.
 
     val numPartitions = countryRDD.getNumPartitions
     println("Number of partitions is " + numPartitions)
 
-    countryRDD.mapPartitionsWithIndex{case (i, rows) => Iterator((i, rows.size))}
-      .toDF("Partition Number", "Number of Records").show
+    //countryRDD.mapPartitionsWithIndex{case (i, rows) => Iterator((i, rows.size))}
+      //.toDF("Partition Number", "Number of Records").show
+
+    //val rddFirst = countryRDD.mapPartitionsWithIndex{case (i, rows) => Iterator(i, rows.size)}.toDF("Partition Number", "Number of Records")
+    //println(rddFirst)
+
+    //countryRDD.mapPartitions(iter => Array(iter.size).iterator, true).take(2).foreach(println)
+
+    val partition1Array:Array[String] = "standard" +:
+                    countryRDD.mapPartitions(iter => Array(iter.size.toString()).iterator, true).collect() :+
+                    (endTime - startTime).toString
+
+    /*val stdPartitionCount1 = sc.parallelize(Seq(partition1Array))
+    val stdPartitionCount2 = stdPartitionCount1.map(v => Row(v: _*))
+    stdPartitionCount2.take(1).foreach(println)*/
 
     println("Printing countryRDD few records")
     countryRDD.take(5).foreach(println)
@@ -84,6 +115,29 @@ object Assignment1 {
     customPartitionedCountry.mapPartitionsWithIndex{case (i, rows) => Iterator((i, rows.size))}
       .toDF("Partition Number", "Number of Records").show
 
+
+    val partition2Array:Array[String] = "partition" +:
+      customPartitionedCountry.mapPartitions(iter => Array(iter.size.toString).iterator, true).collect() :+
+      (endTime2 - startTime2).toString
+
+    val part2OutputDF = Seq(
+      (partition1Array(0), partition1Array(1), partition1Array(2), partition1Array(3)),
+      (partition2Array(0), partition2Array(1), partition2Array(2), partition2Array(3))
+    ).toDF()
+
+    part2OutputDF.show(1)
+
+    part2OutputDF.write
+      .format("csv")
+      .option("header", "false")
+      .mode("overwrite")
+      .save("part2outputtest")
+
+    merge("part2outputtest", "part2Output.csv")
+
+    /*val custPartitionCount1 = sc.parallelize(partition2Array)
+    val custPartitionCount2:RDD[Row] = custPartitionCount1.map(v => Row(v: _*))
+    custPartitionCount2.take(1).foreach(println)*/
 
     //Code for Task 3 below
     /*val inputDF2 = inputDF
@@ -120,7 +174,15 @@ object Assignment1 {
 
     finalDF.show(20)
     val finalOutput = "AggregateValues.csv"
-    //finalDF.coalesce(1).write.format("csv").option("header", "true").csv(finalOutput)
+    finalDF.coalesce(1).write.mode("overwrite").format("csv").option("header", "false").csv(finalOutput)
 
+    merge(finalOutput, "finalAggregates.csv")
+  }
+
+  def merge(srcPath: String, dstPath: String): Unit =  {
+    val hadoopConfig = new Configuration()
+    val hdfs = FileSystem.get(hadoopConfig)
+    hdfs.delete(new Path(dstPath), true)
+    FileUtil.copyMerge(hdfs, new Path(srcPath), hdfs, new Path(dstPath), true, hadoopConfig, null)
   }
 }
